@@ -1,43 +1,309 @@
 <!doctype html>
-<!-- shortcut: bare data page, replace with the arcade UX from the level-2 plan -->
 <html lang="en">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Power Ranger</title>
 <style>
-  body { margin: 0; padding: 16px; background: #000; color: #0f0; font: 16px/1.4 ui-monospace, Menlo, Consolas, monospace; }
-  h1 { font-size: 1.2em; margin: 0 0 8px; }
-  #p { font-size: 3em; }
-  #st { color: #f33; min-height: 1.4em; }
-  table { border-collapse: collapse; margin: 12px 0; }
-  th, td { padding: 2px 12px 2px 0; text-align: right; }
-</style>
-<h1>POWER RANGER</h1>
-<div id="st" role="status"></div>
-<div id="p">-</div>
-<table>
-  <thead><tr><th></th><th>V</th><th>A</th><th>W</th><th>PF</th></tr></thead>
-  <tbody id="ph"></tbody>
-</table>
-<div id="e"></div>
-<script>
-  const $ = id => document.getElementById(id);
-  const f = (v, d) => v == null ? '-' : v.toFixed(d);
-
-  async function tick() {
-    try {
-      const s = await (await fetch('/api')).json();
-      const i = s.inst, e = s.energy;
-      $('st').textContent = s.link_ok ? '' : 'METER OFFLINE';
-      $('p').textContent = i ? f(i.p, 0) + ' W' : '-';
-      $('ph').innerHTML = !i ? '' : i.l.map((l, n) => !l.active ? '' :
-        `<tr><th>L${n + 1}</th><td>${f(l.u, 1)}</td><td>${f(l.i, 2)}</td><td>${f(l.p, 0)}</td><td>${f(l.pf, 2)}</td></tr>`).join('');
-      $('e').textContent = e ? `import ${f(e.import_kwh, 2)} kWh · export ${f(e.export_kwh, 2)} kWh` : '';
-    } catch {
-      $('st').textContent = 'NO CONNECTION';
-    }
-    setTimeout(tick, 1000);
+  /* Command-center console. Phone: tabbed LIVE / RECORD. >= 900 px: both side by side. */
+  @font-face { font-family: "PR Mono"; src: url(/f/mono.woff2) format("woff2"); font-display: swap; }
+  @font-face { font-family: "PR Title"; src: url(/f/title.woff2) format("woff2"); font-style: italic; font-weight: 800; font-display: swap; }
+  :root {
+    --bg: #06070c; --panel: #0f121c; --panel-hi: #171b29; --graph: #090b12; --line: #283047;
+    --fg: #e9edf8; --muted: #8f98b3;
+    --l1: #ec2a33; --l2: #ffd320; --l3: #2f7bff;   /* phase colors */
+    --ok: #2bd25f; --warn: #ffb020; --bad: #ff3b3b;
+    --title: "PR Title", "Arial Narrow", system-ui, sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "PR Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
   }
-  tick();
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.4 var(--body); }
+  [hidden] { display: none !important; }
+  .wrap {
+    max-width: 1080px; margin: 0 auto; display: grid; gap: 14px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: max(12px, env(safe-area-inset-top, 0px)) 32px;
+  }
+
+  header { display: grid; gap: 10px; }
+  .brand { display: flex; align-items: center; gap: 8px; }
+  .brand h1 { margin: 0; font: italic 800 clamp(22px, 6vw, 28px)/1 var(--title); letter-spacing: .02em; text-transform: uppercase; }
+  .brand h1 .r { color: var(--l1); }
+  .brand svg { width: 18px; height: auto; flex: none; }
+  .link { margin-left: auto; font: 12px/1 var(--mono); letter-spacing: .1em; display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .off .dot { background: var(--bad); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .banner { font: 13px/1.3 var(--mono); letter-spacing: .1em; text-align: center; padding: 8px; border: 1px solid var(--bad); color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); border-radius: 4px; }
+
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .tabs button { font: 600 15px/1 var(--body); text-transform: uppercase; letter-spacing: .08em; padding: 12px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; }
+  .tabs button[aria-selected="true"] { color: var(--fg); border-color: var(--muted); background: var(--panel-hi); }
+  .tabs .rec { color: var(--l1); }
+  button:focus-visible { outline: 2px solid var(--l2); outline-offset: 2px; }
+
+  .consoles { display: grid; gap: 14px; }
+  @media (min-width: 900px) {
+    .tabs { display: none; }
+    .consoles { grid-template-columns: 1fr 1fr; align-items: start; }
+    .console[hidden] { display: grid !important; }
+  }
+  .console { display: grid; gap: 12px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+  .console h2 { margin: 0; font: 600 13px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .console h2 small { font: 13px/1 var(--mono); letter-spacing: .04em; text-transform: none; }
+
+  .readout { font: clamp(40px, 12vw, 64px)/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap; }
+  .readout .u { font-size: .38em; color: var(--muted); margin-left: .2em; letter-spacing: 0; }
+  .readout .dec, .readout.dim { color: var(--muted); }
+
+  .stats { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+  .stat { background: var(--panel-hi); border-radius: 4px; padding: 8px 10px; min-width: 0; }
+  .stat b { display: block; font: 600 11px/1.2 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .stat span { font: 18px/1.3 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  canvas { width: 100%; height: 150px; display: block; background: var(--graph); border: 1px solid var(--line); border-radius: 4px; }
+  .legend { display: flex; gap: 14px; margin-top: -4px; font: 12px/1 var(--mono); color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 2px; margin-right: 6px; vertical-align: middle; background: var(--c); }
+  .legend .tot::before { height: 1px; background: var(--muted); }
+
+  .phases { display: grid; gap: 8px; }
+  .phase { display: grid; grid-template-columns: 36px 1fr; background: var(--panel-hi); border-left: 3px solid var(--c); border-radius: 4px; }
+  .phase .tag { color: var(--c); font: 15px/1 var(--mono); display: grid; place-items: center; }
+  .phase .vals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 8px 10px; }
+  .phase .vals div { min-width: 0; }
+  .phase b { display: block; font: 600 10px/1.2 var(--body); letter-spacing: .12em; color: var(--muted); }
+  .phase span { font: 15px/1.3 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .phase .load { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
+  .phase .load span { font-size: 12px; color: var(--muted); }
+  @media (max-width: 420px) { .phase .vals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .track { height: 6px; border-radius: 3px; background: var(--bg); overflow: hidden; }
+  .track i { display: block; height: 100%; transition: width .25s; }
+
+  .rec-head { display: flex; align-items: center; gap: 10px; font: 14px/1 var(--mono); letter-spacing: .12em; }
+  .rec-head .led { width: 10px; height: 10px; border-radius: 50%; background: var(--l1); animation: blink 2s steps(2) infinite; }
+  .rec-head.paused .led { background: var(--muted); animation: none; }
+  .rec-head time { margin-left: auto; font-size: 22px; letter-spacing: .04em; }
+
+  .last { display: grid; gap: 10px; padding: 12px; border: 1px dashed var(--line); border-radius: 4px; }
+  .last h3 { margin: 0; font: 600 13px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; }
+  .last h3 small { font: 12px/1 var(--mono); color: var(--muted); letter-spacing: .04em; text-transform: none; }
+  .last .big { font: 34px/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .last .big .u { font-size: .45em; color: var(--muted); }
+  .last canvas { height: 90px; }
+  .muted { color: var(--muted); font-size: 13px; margin: 0; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 24 32" aria-hidden="true"><polygon points="15,0 2,18 11,18 7,32 22,11 13,11 18,0" fill="var(--l2)"/></svg>
+      <h1>Power <span class="r">Ranger</span></h1>
+      <div class="link" id="link" role="status"><span class="dot"></span><span id="linkTxt">CONNECTING</span></div>
+    </div>
+    <div class="banner" id="banner" role="alert" hidden></div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="View">
+    <button role="tab" id="tabLive" aria-selected="true" aria-controls="live">Live</button>
+    <button role="tab" id="tabRec" aria-selected="false" aria-controls="rec"><span class="rec">●</span> Record</button>
+  </div>
+
+  <div class="consoles">
+    <section class="console" id="live" role="tabpanel" aria-labelledby="tabLive">
+      <h2>Live <small id="fpf">-</small></h2>
+      <div class="readout dim" id="pTot">----</div>
+      <canvas id="gLive" aria-label="Power per phase and total, last 5 minutes"></canvas>
+      <div class="legend" id="legend" hidden><span style="--c:var(--l1)">L1</span><span style="--c:var(--l2)">L2</span><span style="--c:var(--l3)">L3</span><span class="tot">Total</span></div>
+      <div class="phases" id="phases"></div>
+    </section>
+
+    <section class="console" id="rec" role="tabpanel" aria-labelledby="tabRec" hidden>
+      <h2>Record <small>since power-on</small></h2>
+      <div class="rec-head" id="recHead"><span class="led"></span><span id="recState">REC</span><time id="recTime">00:00:00</time></div>
+      <div class="readout" id="recKwh">0.000<span class="u">kWh</span></div>
+      <div class="stats">
+        <div class="stat"><b>Avg</b><span id="recAvg">-</span></div>
+        <div class="stat"><b>Peak</b><span id="recPeak">-</span></div>
+      </div>
+      <canvas id="gRec" aria-label="Average power over this run"></canvas>
+
+      <div class="last">
+        <h3>Last record <small id="lastEnd" hidden>ended: power off</small></h3>
+        <div id="lastBody"></div>
+        <div class="stats" id="lastStats" hidden>
+          <div class="stat"><b>Time</b><span id="lastTime">-</span></div>
+          <div class="stat"><b>Avg</b><span id="lastAvg">-</span></div>
+          <div class="stat"><b>Peak</b><span id="lastPeak">-</span></div>
+        </div>
+        <canvas id="gLast" aria-label="Average power over the last record" hidden></canvas>
+      </div>
+      <p class="muted">Runs under 60 s or 1 Wh don't replace it.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const POLL_MS = 250, LIVE_LEN = 1200, RATED_A = 16;   // RATED_A: per-phase rating of the box's plug
+const PH_COL = ['--l1', '--l2', '--l3'];
+
+function fmt(v, d) {
+  if (v == null || Number.isNaN(v)) return '-';
+  const [i, f] = Math.abs(v).toFixed(d).split('.');
+  return (v < 0 ? '−' : '') + i + (f ? '.' + f : '');
+}
+const hms = s => [s / 3600, s / 60 % 60, s % 60].map(x => String(Math.floor(x)).padStart(2, '0')).join(':');
+const watts = w => w == null ? '-' : Math.abs(w) >= 10000 ? fmt(w / 1000, 2) + ' kW' : fmt(w, 0) + ' W';
+
+// series: [{ vals, color, area, width }] on one shared scale; null breaks a line.
+// cap: fixed x capacity so a filling buffer scrolls in from the right.
+function graph(cv, series, { cap, left = '', right = 'now' } = {}) {
+  const dpr = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;   // hidden tab
+  if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const L = 44, R = 8, T = 8, B = 18, pw = w - L - R, ph = h - T - B;
+  const vals = series.flatMap(s => s.vals).filter(v => v != null);
+  const max = Math.max(100, ...vals) * 1.1;
+  const step = [100, 250, 500, 1000, 2500, 5000, 10000, 25000].find(s => max / s <= 4) || 50000;
+  g.font = '11px ' + css('--mono'); g.fillStyle = css('--muted'); g.strokeStyle = css('--line'); g.lineWidth = 1;
+  for (let v = 0; v <= max; v += step) {
+    const y = T + ph - v / max * ph;
+    g.beginPath(); g.moveTo(L, y); g.lineTo(L + pw, y); g.stroke();
+    g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillText(v >= 1000 ? v / 1000 + 'k' : v, L - 6, y);
+  }
+  g.textAlign = 'left'; g.textBaseline = 'top'; g.fillText(left, L, T + ph + 4);
+  g.textAlign = 'right'; g.fillText(right, L + pw, T + ph + 4);
+  const y = v => T + ph - v / max * ph;
+  for (const s of series) {
+    const n = s.vals.length, c = Math.max(cap || n, 2);
+    const x = i => L + (i + c - n) / (c - 1) * pw;
+    let seg = [];
+    const flush = () => {
+      if (seg.length > 1) {
+        g.beginPath(); seg.forEach(([a, b], k) => k ? g.lineTo(a, b) : g.moveTo(a, b));
+        g.strokeStyle = s.color; g.lineWidth = s.width || 2; g.stroke();
+        if (s.area) {
+          g.lineTo(seg[seg.length - 1][0], T + ph); g.lineTo(seg[0][0], T + ph); g.closePath();
+          const grad = g.createLinearGradient(0, T, 0, T + ph);
+          grad.addColorStop(0, s.color + '40'); grad.addColorStop(1, s.color + '00');
+          g.fillStyle = grad; g.fill();
+        }
+      }
+      seg = [];
+    };
+    s.vals.forEach((v, i) => v == null ? flush() : seg.push([x(i), y(v)]));
+    flush();
+    const lv = s.vals[n - 1];
+    if (lv != null) { g.fillStyle = s.color; g.beginPath(); g.arc(x(n - 1), y(lv), 3, 0, 7); g.fill(); }
+  }
+}
+const runGraph = (cv, r, color) =>
+  graph(cv, [{ vals: r.graph, color, area: true }], { left: hms(0), right: hms(r.graph.length * r.bucket_s) });
+
+// --- data from the box ---
+let s = null, live = [], rec = null, last = null, seq = -1, up = -1, recAt = 0, online = false;
+async function get(u) {
+  const r = await fetch(u, { cache: 'no-store' });
+  if (!r.ok) throw new Error(u + ' ' + r.status);
+  return r.json();
+}
+async function poll() {
+  try {
+    const n = await get('/api');
+    if (up < 0 || n.uptime_s < up) {
+      // first load, or the box rebooted: fetch history
+      [live, rec, last] = await Promise.all([get('/api/live'), get('/api/rec'), get('/api/last')]);
+      recAt = Date.now();
+    } else if (n.seq !== seq) {
+      // shortcut: missed samples are filled with the current one; refetch if far behind
+      const miss = n.seq - seq;
+      if (miss > 8) live = await get('/api/live');
+      else {
+        const i = n.inst, smp = i ? [i.p, ...i.l.map(l => l.active ? l.p : null)] : [null, null, null, null];
+        for (let k = 0; k < miss; k++) live.push(smp);
+        live.splice(0, live.length - LIVE_LEN);
+      }
+      if (Date.now() - recAt > 10000) { rec = await get('/api/rec'); recAt = Date.now(); }
+    }
+    s = n; seq = n.seq; up = n.uptime_s; online = true;
+  } catch {
+    online = false;
+  }
+  render();
+  setTimeout(poll, POLL_MS);
+}
+
+function render() {
+  const i = s && online ? s.inst : null;
+  $('link').classList.toggle('off', !i);
+  $('linkTxt').textContent = !online ? 'NO BOX' : i ? 'METER LINK' : 'NO METER';
+  $('banner').hidden = !!i;
+  $('banner').textContent = !online ? 'NO CONNECTION · JOIN THE POWERRANGER WIFI' : 'METER OFFLINE · CHECK RS485 WIRING';
+  if (!s) return;
+
+  // live
+  $('pTot').classList.toggle('dim', !i);
+  if (i) { const [a, b] = fmt(i.p, 2).split('.'); $('pTot').innerHTML = `${a}<span class="dec">.${b}</span><span class="u">W</span>`; }
+  else $('pTot').textContent = '----';
+  $('fpf').textContent = i ? `${fmt(i.f, 2)} Hz · PF ${fmt(i.pf, 3)}` : '-';
+  const act = i ? i.l.filter(l => l.active).length : 0;
+  $('phases').innerHTML = !i ? '' : i.l.map((l, k) => {
+    if (!l.active) return '';
+    const load = Math.min(1, (l.i || 0) / RATED_A);
+    const col = load < .6 ? '--ok' : load < .85 ? '--warn' : '--bad';
+    return `<div class="phase" style="--c:var(${PH_COL[k]})"><div class="tag">L${k + 1}</div><div class="vals">
+      <div><b>VOLT</b><span>${fmt(l.u, 1)} V</span></div>
+      <div><b>AMP</b><span>${fmt(l.i, 2)} A</span></div>
+      <div><b>WATT</b><span>${fmt(l.p, 2)} W</span></div>
+      <div><b>PF</b><span>${fmt(l.pf, 3)}</span></div>
+      <div class="load"><div class="track"><i style="width:${load * 100}%;background:var(${col})"></i></div><span>${Math.round(load * 100)} % of ${RATED_A} A</span></div>
+    </div></div>`;
+  }).join('');
+  const multi = act > 1 || live.some(x => x[2] != null || x[3] != null);
+  $('legend').hidden = !multi;
+  graph($('gLive'), multi
+    ? [{ vals: live.map(x => x[0]), color: css('--muted'), width: 1 },
+       ...[1, 2, 3].map(k => ({ vals: live.map(x => x[k]), color: css(PH_COL[k - 1]) }))]
+    : [{ vals: live.map(x => x[0]), color: css('--l1'), area: true }],
+    { cap: LIVE_LEN, left: '−5 min' });
+
+  // record
+  const r = s.rec;
+  $('recHead').classList.toggle('paused', !i);
+  $('recState').textContent = i ? 'REC' : 'PAUSED';
+  $('recTime').textContent = hms(r.secs);
+  $('recKwh').innerHTML = `${fmt(r.wh / 1000, 3)}<span class="u">kWh</span>`;
+  $('recAvg').textContent = watts(r.avg_w);
+  $('recPeak').textContent = watts(r.peak_w);
+  if (rec) runGraph($('gRec'), rec, css('--l1'));
+
+  const l = s.last;
+  $('lastEnd').hidden = $('lastStats').hidden = $('gLast').hidden = !l;
+  if (l) {
+    $('lastBody').innerHTML = `<div class="big">${fmt(l.wh / 1000, 3)}<span class="u"> kWh</span></div>`;
+    $('lastTime').textContent = hms(l.secs);
+    $('lastAvg').textContent = watts(l.avg_w);
+    $('lastPeak').textContent = watts(l.peak_w);
+    if (last) runGraph($('gLast'), last, css('--l3'));
+  } else {
+    $('lastBody').innerHTML = '<p class="muted">No last record yet. Unplug the box after a run; it shows up here at the next power-on.</p>';
+  }
+}
+
+function tab(liveOn) {
+  $('tabLive').setAttribute('aria-selected', liveOn); $('tabRec').setAttribute('aria-selected', !liveOn);
+  $('live').hidden = !liveOn; $('rec').hidden = liveOn; render();
+}
+$('tabLive').onclick = () => tab(true);
+$('tabRec').onclick = () => tab(false);
+addEventListener('resize', render);
+document.fonts && document.fonts.ready.then(render);
+poll();
 </script>
 </html>

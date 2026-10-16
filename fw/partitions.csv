@@ -1,0 +1,5 @@
+# Name,   Type, SubType, Offset,   Size
+# 1 MB NVS: the running record (~1 KB) is saved every 10 s; spread over 256 pages for wear.
+nvs,      data, nvs,     0x9000,   0x100000,
+phy_init, data, phy,     0x109000, 0x1000,
+factory,  app,  factory, 0x110000, 0x300000,
