@@ -179,7 +179,13 @@ fn main() -> anyhow::Result<()> {
             }
             None => {}
         }
-        s.link_ok = misses < MAX_MISSES;
+        let was_ok = s.link_ok;
+        s.link_ok = misses < MAX_MISSES && s.inst.is_some();
+        match (was_ok, s.link_ok) {
+            (false, true) => info!("meter link up, L1 {:?}, f {:?}", s.inst.map(|i| i.l[0]), s.inst.and_then(|i| i.f)),
+            (true, false) => warn!("meter link down"),
+            _ => {}
+        }
         if !s.link_ok {
             // Never show stale values as live.
             s.inst = None;

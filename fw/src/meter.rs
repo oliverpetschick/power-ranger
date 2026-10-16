@@ -1,11 +1,12 @@
 //! B23 Modbus RTU master: UART1 + MAX485, DE/RE on GPIO21.
 #![cfg_attr(feature = "sim", allow(unused))]
 
-use anyhow::{ensure, Result};
+use anyhow::{anyhow, ensure, Result};
 use esp_idf_svc::hal::delay::{TickType, BLOCK};
 use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio17, Gpio18, Gpio21, Output, PinDriver};
 use esp_idf_svc::hal::uart::{config::Config, UartDriver, UART1};
 use esp_idf_svc::hal::units::Hertz;
+use std::time::{Duration, Instant};
 use rmodbus::{client::ModbusRequest, ModbusProto};
 
 // Must match the meter panel settings (RS485 → Modbus).
@@ -53,11 +54,24 @@ impl Meter {
         self.uart.wait_tx_done(BLOCK)?;
         self.de.set_low()?;
 
+        // read() returns whatever has arrived (e.g. 120 B at FIFO-full), so collect the whole frame.
         let mut resp = vec![0u8; 5 + 2 * len as usize];
-        let n = self.uart.read(&mut resp, TickType::new_millis(TIMEOUT_MS).ticks())?;
+        let mut n = 0;
+        let deadline = Instant::now() + Duration::from_millis(TIMEOUT_MS);
+        while n < resp.len() && !(n >= 5 && resp[1] & 0x80 != 0) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            match self.uart.read(&mut resp[n..], TickType::new_millis(left.as_millis() as u64).ticks()) {
+                Ok(k) => n += k,
+                Err(_) => break, // timeout, nothing more arrived
+            }
+        }
         ensure!(n > 0, "timeout");
         let mut regs = Vec::with_capacity(len as usize);
-        mreq.parse_u16(&resp[..n], &mut regs)?;
+        mreq.parse_u16(&resp[..n], &mut regs)
+            .map_err(|e| anyhow!("{e:?}, rx {n} B: {:02x?}", &resp[..n.min(12)]))?;
         ensure!(regs.len() == len as usize, "got {} regs, want {len}", regs.len());
         Ok(regs)
     }
