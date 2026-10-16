@@ -94,7 +94,10 @@ pub fn decode_energy(r: &[u16]) -> Option<Energy> {
         return None;
     }
     let kwh = |i| u64_at(r, i).map(|v| v as f64 * 0.01);
-    Some(Energy { import_kwh: kwh(0), export_kwh: kwh(4) })
+    Some(Energy {
+        import_kwh: kwh(0),
+        export_kwh: kwh(4),
+    })
 }
 
 #[cfg(test)]

@@ -26,7 +26,10 @@ mod meter;
 
 const SSID: &str = "PowerRanger";
 const AP_PASS: &str = env!("PR_AP_PASS");
-const _: () = assert!(AP_PASS.len() >= 8 && AP_PASS.len() <= 63, "PR_AP_PASS: WPA2 needs 8..=63 chars");
+const _: () = assert!(
+    AP_PASS.len() >= 8 && AP_PASS.len() <= 63,
+    "PR_AP_PASS: WPA2 needs 8..=63 chars"
+);
 
 // shortcut: 250 ms guessed, B23 refresh rate is undocumented; measure once wired and match it.
 const PERIOD: Duration = Duration::from_millis(250);
@@ -83,7 +86,10 @@ fn main() -> anyhow::Result<()> {
         _ => load(&nvs, "last"),
     };
     info!("last record: {:?}", last.as_ref().map(Record::summary));
-    let state = Arc::new(Mutex::new(State { last, ..Default::default() }));
+    let state = Arc::new(Mutex::new(State {
+        last,
+        ..Default::default()
+    }));
 
     // DHCP must hand out the AP itself as DNS (esp-idf-svc defaults to 8.8.8.8), else phones
     // never query our captive DNS and no portal pops up.
@@ -97,8 +103,10 @@ fn main() -> anyhow::Result<()> {
         ..NetifConfiguration::wifi_default_router()
     })?;
     let driver = WifiDriver::new(p.modem, sysloop.clone(), Some(part))?;
-    let mut wifi =
-        BlockingWifi::wrap(EspWifi::wrap_all(driver, EspNetif::new(NetifStack::Sta)?, ap_netif)?, sysloop)?;
+    let mut wifi = BlockingWifi::wrap(
+        EspWifi::wrap_all(driver, EspNetif::new(NetifStack::Sta)?, ap_netif)?,
+        sysloop,
+    )?;
     wifi.set_configuration(&Configuration::AccessPoint(AccessPointConfiguration {
         ssid: SSID.try_into().unwrap(),
         password: AP_PASS.try_into().unwrap(),
@@ -111,7 +119,9 @@ fn main() -> anyhow::Result<()> {
     let ip = wifi.wifi().ap_netif().get_ip_info()?.ip;
     info!("AP {SSID} up at {ip}");
 
-    thread::Builder::new().stack_size(4096).spawn(move || dns_server(ip.octets()))?;
+    thread::Builder::new()
+        .stack_size(4096)
+        .spawn(move || dns_server(ip.octets()))?;
 
     // Portal sheet, OS probes and a browser tab each keep connections open; 4 sockets run out.
     let mut http = EspHttpServer::new(&HttpConfig {
@@ -119,9 +129,27 @@ fn main() -> anyhow::Result<()> {
         max_open_sockets: 7,
         ..Default::default()
     })?;
-    serve(&mut http, "/", "text/html; charset=utf-8", "no-cache", include_bytes!("../web/index.html"))?;
-    serve(&mut http, "/f/mono.woff2", "font/woff2", "max-age=31536000, immutable", include_bytes!("../web/mono.woff2"))?;
-    serve(&mut http, "/f/title.woff2", "font/woff2", "max-age=31536000, immutable", include_bytes!("../web/title.woff2"))?;
+    serve(
+        &mut http,
+        "/",
+        "text/html; charset=utf-8",
+        "no-cache",
+        include_bytes!("../web/index.html"),
+    )?;
+    serve(
+        &mut http,
+        "/f/mono.woff2",
+        "font/woff2",
+        "max-age=31536000, immutable",
+        include_bytes!("../web/mono.woff2"),
+    )?;
+    serve(
+        &mut http,
+        "/f/title.woff2",
+        "font/woff2",
+        "max-age=31536000, immutable",
+        include_bytes!("../web/title.woff2"),
+    )?;
     api(&mut http, "/api", &state, |s| {
         serde_json::to_vec(&Now {
             seq: s.seq,
@@ -134,9 +162,15 @@ fn main() -> anyhow::Result<()> {
             last: s.last.as_ref().map(Record::summary),
         })
     })?;
-    api(&mut http, "/api/live", &state, |s| serde_json::to_vec(&s.live))?;
-    api(&mut http, "/api/rec", &state, |s| serde_json::to_vec(&s.rec))?;
-    api(&mut http, "/api/last", &state, |s| serde_json::to_vec(&s.last))?;
+    api(&mut http, "/api/live", &state, |s| {
+        serde_json::to_vec(&s.live)
+    })?;
+    api(&mut http, "/api/rec", &state, |s| {
+        serde_json::to_vec(&s.rec)
+    })?;
+    api(&mut http, "/api/last", &state, |s| {
+        serde_json::to_vec(&s.last)
+    })?;
     // Captive portal: every other URL (OS connectivity probes included) goes to the dashboard.
     let home: &'static str = Box::leak(format!("http://{ip}/").into_boxed_str());
     http.fn_handler("/*", Method::Get, move |req| -> anyhow::Result<()> {
@@ -182,7 +216,11 @@ fn main() -> anyhow::Result<()> {
         let was_ok = s.link_ok;
         s.link_ok = misses < MAX_MISSES && s.inst.is_some();
         match (was_ok, s.link_ok) {
-            (false, true) => info!("meter link up, L1 {:?}, f {:?}", s.inst.map(|i| i.l[0]), s.inst.and_then(|i| i.f)),
+            (false, true) => info!(
+                "meter link up, L1 {:?}, f {:?}",
+                s.inst.map(|i| i.l[0]),
+                s.inst.and_then(|i| i.f)
+            ),
             (true, false) => warn!("meter link down"),
             _ => {}
         }
@@ -222,7 +260,10 @@ fn main() -> anyhow::Result<()> {
 
 fn load(nvs: &EspNvs<NvsDefault>, key: &str) -> Option<Record> {
     let mut buf = [0u8; NVS_BUF];
-    nvs.get_raw(key, &mut buf).ok().flatten().and_then(Record::from_bytes)
+    nvs.get_raw(key, &mut buf)
+        .ok()
+        .flatten()
+        .and_then(Record::from_bytes)
 }
 
 fn serve(
@@ -233,19 +274,35 @@ fn serve(
     body: &'static [u8],
 ) -> anyhow::Result<()> {
     http.fn_handler(uri, Method::Get, move |req| -> anyhow::Result<()> {
-        req.into_response(200, None, &[("Content-Type", ctype), ("Cache-Control", cache)])?
-            .write_all(body)?;
+        req.into_response(
+            200,
+            None,
+            &[("Content-Type", ctype), ("Cache-Control", cache)],
+        )?
+        .write_all(body)?;
         Ok(())
     })?;
     Ok(())
 }
 
-fn api(http: &mut EspHttpServer<'static>, uri: &str, state: &Arc<Mutex<State>>, f: Json) -> anyhow::Result<()> {
+fn api(
+    http: &mut EspHttpServer<'static>,
+    uri: &str,
+    state: &Arc<Mutex<State>>,
+    f: Json,
+) -> anyhow::Result<()> {
     let state = state.clone();
     http.fn_handler(uri, Method::Get, move |req| -> anyhow::Result<()> {
         let body = f(&state.lock().unwrap())?;
-        req.into_response(200, None, &[("Content-Type", "application/json"), ("Cache-Control", "no-store")])?
-            .write_all(&body)?;
+        req.into_response(
+            200,
+            None,
+            &[
+                ("Content-Type", "application/json"),
+                ("Cache-Control", "no-store"),
+            ],
+        )?
+        .write_all(&body)?;
         Ok(())
     })?;
     Ok(())
