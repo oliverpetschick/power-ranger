@@ -44,7 +44,7 @@ cd core && cargo test
 ## Use
 
 1. Plug the box in and connect the device under test.
-2. Join the WiFi **PowerRanger** and the dashboard opens. If you closed it, open **`http://power.ranger`**. Type the `http://`, otherwise the browser may search instead. Any name works, since the box answers all DNS lookups; `http://192.168.71.1` works too.
+2. Join the WiFi **PowerRanger** and the dashboard opens. If you closed it, open **`http://192.168.71.1`**. The box can't serve trusted HTTPS, so browsers may show a "not secure" page first: continue from there. Names like `power.ranger` resolve too, but browsers run a web search for unknown domain endings.
 3. **LIVE** shows what the device draws right now; **RECORD** shows the run since power-on.
 4. Unplug when done. At the next power-on, the run is under **LAST RECORD**.
 
