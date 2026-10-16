@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- shortcut: bare data page, replace with the arcade UX from the level-2 plan -->
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Power Ranger</title>
+<style>
+  body { margin: 0; padding: 16px; background: #000; color: #0f0; font: 16px/1.4 ui-monospace, Menlo, Consolas, monospace; }
+  h1 { font-size: 1.2em; margin: 0 0 8px; }
+  #p { font-size: 3em; }
+  #st { color: #f33; min-height: 1.4em; }
+  table { border-collapse: collapse; margin: 12px 0; }
+  th, td { padding: 2px 12px 2px 0; text-align: right; }
+</style>
+<h1>POWER RANGER</h1>
+<div id="st" role="status"></div>
+<div id="p">-</div>
+<table>
+  <thead><tr><th></th><th>V</th><th>A</th><th>W</th><th>PF</th></tr></thead>
+  <tbody id="ph"></tbody>
+</table>
+<div id="e"></div>
+<script>
+  const $ = id => document.getElementById(id);
+  const f = (v, d) => v == null ? '-' : v.toFixed(d);
+
+  async function tick() {
+    try {
+      const s = await (await fetch('/api')).json();
+      const i = s.inst, e = s.energy;
+      $('st').textContent = s.link_ok ? '' : 'METER OFFLINE';
+      $('p').textContent = i ? f(i.p, 0) + ' W' : '-';
+      $('ph').innerHTML = !i ? '' : i.l.map((l, n) => !l.active ? '' :
+        `<tr><th>L${n + 1}</th><td>${f(l.u, 1)}</td><td>${f(l.i, 2)}</td><td>${f(l.p, 0)}</td><td>${f(l.pf, 2)}</td></tr>`).join('');
+      $('e').textContent = e ? `import ${f(e.import_kwh, 2)} kWh · export ${f(e.export_kwh, 2)} kWh` : '';
+    } catch {
+      $('st').textContent = 'NO CONNECTION';
+    }
+    setTimeout(tick, 1000);
+  }
+  tick();
+</script>
+</html>
