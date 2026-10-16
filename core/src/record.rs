@@ -36,7 +36,15 @@ pub struct Summary {
 
 impl Default for Record {
     fn default() -> Self {
-        Self { secs: 0.0, wh: 0.0, peak_w: 0.0, bucket_s: 1.0, graph: Vec::with_capacity(BUCKETS), acc_ws: 0.0, acc_s: 0.0 }
+        Self {
+            secs: 0.0,
+            wh: 0.0,
+            peak_w: 0.0,
+            bucket_s: 1.0,
+            graph: Vec::with_capacity(BUCKETS),
+            acc_ws: 0.0,
+            acc_s: 0.0,
+        }
     }
 }
 
@@ -62,7 +70,12 @@ impl Record {
 
     pub fn summary(&self) -> Summary {
         let avg_w = (self.secs > 0.0).then(|| (self.wh * 3600.0 / self.secs) as f32);
-        Summary { secs: self.secs, wh: self.wh, peak_w: self.peak_w, avg_w }
+        Summary {
+            secs: self.secs,
+            wh: self.wh,
+            peak_w: self.peak_w,
+            avg_w,
+        }
     }
 
     pub fn counts(&self) -> bool {
@@ -163,7 +176,10 @@ mod tests {
         }
         let b = r.to_bytes();
         let back = Record::from_bytes(&b).unwrap();
-        assert_eq!((back.secs, back.wh, back.peak_w, back.bucket_s), (r.secs, r.wh, r.peak_w, r.bucket_s));
+        assert_eq!(
+            (back.secs, back.wh, back.peak_w, back.bucket_s),
+            (r.secs, r.wh, r.peak_w, r.bucket_s)
+        );
         assert_eq!(back.graph, r.graph);
 
         assert!(Record::from_bytes(&b[..b.len() - 1]).is_none());

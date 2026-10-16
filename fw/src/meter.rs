@@ -6,8 +6,8 @@ use esp_idf_svc::hal::delay::{TickType, BLOCK};
 use esp_idf_svc::hal::gpio::{AnyIOPin, Gpio17, Gpio18, Gpio21, Output, PinDriver};
 use esp_idf_svc::hal::uart::{config::Config, UartDriver, UART1};
 use esp_idf_svc::hal::units::Hertz;
-use std::time::{Duration, Instant};
 use rmodbus::{client::ModbusRequest, ModbusProto};
+use std::time::{Duration, Instant};
 
 // Must match the meter panel settings (RS485 → Modbus).
 const SLAVE: u8 = 1;
@@ -63,7 +63,10 @@ impl Meter {
             if left.is_zero() {
                 break;
             }
-            match self.uart.read(&mut resp[n..], TickType::new_millis(left.as_millis() as u64).ticks()) {
+            match self.uart.read(
+                &mut resp[n..],
+                TickType::new_millis(left.as_millis() as u64).ticks(),
+            ) {
                 Ok(k) => n += k,
                 Err(_) => break, // timeout, nothing more arrived
             }
@@ -72,7 +75,11 @@ impl Meter {
         let mut regs = Vec::with_capacity(len as usize);
         mreq.parse_u16(&resp[..n], &mut regs)
             .map_err(|e| anyhow!("{e:?}, rx {n} B: {:02x?}", &resp[..n.min(12)]))?;
-        ensure!(regs.len() == len as usize, "got {} regs, want {len}", regs.len());
+        ensure!(
+            regs.len() == len as usize,
+            "got {} regs, want {len}",
+            regs.len()
+        );
         Ok(regs)
     }
 }
