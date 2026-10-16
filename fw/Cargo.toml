@@ -8,7 +8,7 @@ edition = "2021"
 sim = []
 
 [dependencies]
-b23 = { path = "../b23" }
+pr_core = { path = "../core" }
 esp-idf-svc = "0.51"
 log = "0.4"
 anyhow = "1"

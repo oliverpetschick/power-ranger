@@ -10,7 +10,7 @@ use rmodbus::{client::ModbusRequest, ModbusProto};
 
 // Must match the meter panel settings (RS485 → Modbus).
 const SLAVE: u8 = 1;
-const BAUD: u32 = 19_200;
+const BAUD: u32 = 115_200;
 const TIMEOUT_MS: u64 = 200;
 
 pub struct Meter {
@@ -72,7 +72,7 @@ fn sim(start: u16, len: u16, t: f32) -> Vec<u16> {
         }
     }
     let mut r = vec![0u16; len as usize];
-    if start == b23::ENERGY_START {
+    if start == pr_core::b23::ENERGY_START {
         put(&mut r, 0, 1_234_500 + (t * 2.3 / 36.0) as u64, 4); // 0.01 kWh
         return r;
     }
